@@ -1,0 +1,447 @@
+# Aula 6 – Computação em Nuvem
+
+## Atividade prática – ConfigMap e armazenamento persistente no Kubernetes
+
+### Introdução
+
+Nesta aula prática, realizamos algumas atividades utilizando o Kubernetes para entender melhor como funcionam o ConfigMap, os Pods e o armazenamento de dados.
+
+Durante a atividade, criamos uma página HTML, utilizamos um ConfigMap para disponibilizar seu conteúdo dentro de um container e configuramos um armazenamento para guardar dados.
+
+Abaixo, explico cada etapa que foi realizada e o que consegui entender durante a prática.
+
+---
+
+## PASSO 1 – Verificando os Nodes
+
+**Comando utilizado:**
+
+```bash
+kubectl get nodes
+```
+
+**Resultado:**
+
+```text
+NAME           STATUS   ROLES           AGE   VERSION
+controlplane   Ready    control-plane   9d    v1.37.1
+node01         Ready    <none>          9d    v1.37.1
+```
+
+**O que eu entendi:**
+
+Nesse primeiro passo, verificamos os Nodes disponíveis no Kubernetes. Eles são responsáveis por executar os recursos e aplicações do ambiente.
+
+Pelo resultado, podemos observar que os dois Nodes estavam com o status `Ready`, mostrando que estavam prontos para trabalhar.
+
+---
+
+## PASSO 2 – Criando um ConfigMap
+
+**Comandos utilizados:**
+
+```bash
+kubectl create configmap pagina-aula6 \
+> --from-literal=index.html="<h1>Aula 6 - compatacao em Nuvem</h1><p>pagina carregada por ConfigMap</p>"
+```
+
+**Resultado:**
+
+```text
+configmap/pagina-aula6 created
+```
+
+```bash
+kubectl get configmap pagina-aula6
+```
+
+**Resultado:**
+
+```text
+NAME           DATA   AGE
+pagina-aula6   1      81s
+```
+
+**O que eu entendi:**
+
+Nesta etapa, criamos um ConfigMap chamado `pagina-aula6`. Ele serve para guardar informações e configurações que podem ser utilizadas pelos containers.
+
+No nosso caso, colocamos um conteúdo HTML dentro dele, que depois seria utilizado para carregar uma página no servidor Nginx.
+
+---
+
+## PASSO 3 – Criando o arquivo pod-config.yaml
+
+**Comando utilizado:**
+
+```bash
+cat <<'EOF' > pod-config.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-config
+spec:
+  containers:
+  - name: nginx
+    image: nginx:alpine
+    volumeMounts:
+    - name: pagina
+      mountPath: /usr/share/nginx/html
+  volumes:
+  - name: pagina
+    configMap:
+      name: pagina-aula6
+EOF
+```
+
+**O que eu entendi:**
+
+Aqui criamos um arquivo YAML com as configurações do Pod. Nele definimos que seria utilizado o Nginx como servidor e que o conteúdo do ConfigMap seria disponibilizado dentro da pasta onde o Nginx procura os arquivos da página.
+
+Dessa forma, conseguimos conectar o ConfigMap ao container.
+
+---
+
+## PASSO 4 – Criando e testando o Pod
+
+**Comandos utilizados:**
+
+```bash
+kubectl apply -f pod-config.yaml
+```
+
+**Resultado:**
+
+```text
+pod/web-config created
+```
+
+```bash
+kubectl get pods
+```
+
+**Resultado:**
+
+```text
+NAME         READY   STATUS    RESTARTS   AGE
+web-config   1/1     Running   0          58s
+```
+
+**Comando para testar a página:**
+
+```bash
+kubectl exec web-config -- wget -qO- http://localhost
+```
+
+**Resultado:**
+
+```html
+<h1>Aula 6 - compatacao em Nuvem</h1><p>pagina carregada por ConfigMap</p>
+```
+
+**O que eu entendi:**
+
+Depois de criar o arquivo, aplicamos as configurações no Kubernetes e verificamos se o Pod estava funcionando.
+
+O resultado mostrou que ele estava com status `Running`, ou seja, estava em execução.
+
+Depois fizemos um teste para acessar a página pelo próprio container. Conseguimos visualizar o conteúdo HTML que havíamos colocado no ConfigMap. Isso mostrou que a configuração estava funcionando corretamente.
+
+---
+
+## PASSO 5 – Criando um PersistentVolume (PV)
+
+**Comando utilizado:**
+
+```bash
+cat <<'EOF' > pv.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-aula6
+spec:
+  capacity:
+    storage: 100Mi
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
+  hostPath:
+    path: /mnt/data-aula6
+EOF
+```
+
+**Comandos para aplicar e verificar:**
+
+```bash
+kubectl apply -f pv.yaml
+kubectl get pv
+```
+
+**Resultado:**
+
+```text
+persistentvolume/pv-aula6 created
+NAME       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   VOLUMEATTRIBUTESCLASS   REASON   AGE
+pv-aula6   100Mi      RWO            Retain           Available           manual         <unset>                          1s
+root@controlplane:~$
+```
+
+**O que eu entendi:**
+
+Nesta etapa, criamos um PersistentVolume, conhecido como PV. Ele funciona como um espaço de armazenamento que pode ser utilizado para guardar dados.
+
+Configuramos esse armazenamento com capacidade de 100Mi e definimos o caminho onde os dados seriam guardados.
+
+O resultado mostrou o PV com status `Available`, indicando que ele estava disponível para ser utilizado.
+
+---
+
+## PASSO 6 – Criando um PersistentVolumeClaim (PVC)
+
+**Comando utilizado:**
+
+```bash
+cat <<'EOF' > pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-aula6
+spec:
+  storageClassName: manual
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Mi
+EOF
+```
+
+**Comandos para aplicar e verificar:**
+
+```bash
+kubectl apply -f pvc.yaml
+kubectl get pv,pvc
+```
+
+**Resultado:**
+
+```text
+persistentvolumeclaim/pvc-aula6 created
+NAME                        CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM               STORAGECLASS   VOLUMEATTRIBUTESCLASS   REASON   AGE
+persistentvolume/pv-aula6   100Mi      RWO            Retain           Bound    default/pvc-aula6   manual         <unset>                          71s
+
+NAME                              STATUS   VOLUME     CAPACITY   ACCESS MODES   STORAGECLASS   VOLUMEATTRIBUTESCLASS   AGE
+persistentvolumeclaim/pvc-aula6   Bound    pv-aula6   100Mi      RWO            manual         <unset>                 0s
+```
+
+**O que eu entendi:**
+
+Agora criamos um PVC, que funciona como uma solicitação de espaço de armazenamento.
+
+Enquanto o PV representa o espaço disponível, o PVC é o pedido para utilizar esse espaço.
+
+No nosso exercício, solicitamos 50Mi e o Kubernetes conseguiu associar essa solicitação ao PV de 100Mi que criamos anteriormente.
+
+O status `Bound` mostrou que essa associação foi realizada corretamente.
+
+---
+
+## PASSO 7 – Criando um Pod para utilizar o armazenamento
+
+**Comando utilizado:**
+
+```bash
+cat <<'EOF' > pod-dados.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-dados
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ['sh','-c','sleep 3600']
+    volumeMounts:
+    - name: dados
+      mountPath: /dados
+  volumes:
+  - name: dados
+    persistentVolumeClaim:
+      claimName: pvc-aula6
+EOF
+```
+
+**Comandos para aplicar e verificar:**
+
+```bash
+kubectl apply -f pod-dados.yaml
+kubectl get pod pod-dados
+```
+
+**Resultado:**
+
+```text
+pod/pod-dados created
+NAME        READY   STATUS              RESTARTS   AGE
+pod-dados   0/1     ContainerCreating   0          0s
+```
+
+**O que eu entendi:**
+
+Neste passo, criamos outro Pod, chamado `pod-dados`, utilizando a imagem BusyBox.
+
+A ideia foi conectar esse Pod ao armazenamento que configuramos anteriormente, utilizando o PVC.
+
+Também definimos que o armazenamento seria acessado dentro da pasta `/dados`.
+
+No resultado, o Pod apareceu inicialmente como `ContainerCreating`, indicando que ainda estava no processo de criação naquele momento.
+
+---
+
+## PASSO 8 – Tentando salvar um arquivo no armazenamento
+
+**Comando utilizado:**
+
+```bash
+kubectl exec pod-dados -- sh -c 'echo "Dado persistente da Aula 6" >
+> /dados/mensagem.txt'
+```
+
+**Resultado:**
+
+```text
+sh: syntax error: unexpected newline
+command terminated with exit code 2
+```
+
+**Comando utilizado para verificar o arquivo:**
+
+```bash
+kubectl exec pod-dados -- cat /dados/mensagem.txt
+```
+
+**Resultado:**
+
+```text
+cat: can't open '/dados/mensagem.txt': No such file or directory
+command terminated with exit code 1
+```
+
+**O que eu entendi:**
+
+Nesta etapa, tentamos criar um arquivo de texto dentro da pasta `/dados`, que estava conectada ao armazenamento persistente.
+
+Porém, ocorreu um erro na execução do comando, relacionado à quebra de linha. Por isso, o arquivo não chegou a ser criado.
+
+Quando tentamos consultar o arquivo, o sistema informou que ele não existia.
+
+Com isso, entendi que não foi possível concluir o teste de gravação dos dados nessa etapa.
+
+---
+
+## PASSO 9 – Excluindo o Pod
+
+**Comando utilizado:**
+
+```bash
+kubectl delete pod pod-dados
+```
+
+**Resultado:**
+
+```text
+pod "pod-dados" deleted from default namespace
+```
+
+**Comando para verificar os Pods:**
+
+```bash
+kubectl get pods
+```
+
+**Resultado:**
+
+```text
+NAME         READY   STATUS    RESTARTS   AGE
+web-config   1/1     Running   0          12m
+```
+
+**O que eu entendi:**
+
+Aqui excluímos o Pod `pod-dados` que havíamos criado anteriormente.
+
+Depois verificamos os Pods novamente e observamos que ele não aparecia mais na lista. Apenas o `web-config` continuava em execução.
+
+Essa etapa serviu para mostrar como podemos remover um Pod do ambiente Kubernetes.
+
+---
+
+## PASSO 10 – Criando outro Pod para verificar os dados
+
+**Comandos utilizados:**
+
+```bash
+sed 's/name: pod-dados/name: pod-dados-2/' pod-dados.yaml > pod-dados-2.yaml
+```
+
+```bash
+root@controlplane:~$ kubectl apply -f pod-dados-2.yaml
+```
+
+**Resultado:**
+
+```text
+pod/pod-dados-2 created
+```
+
+**Comando para verificar:**
+
+```bash
+root@controlplane:~$ kubectl get pod pod-dados-2
+```
+
+**Resultado:**
+
+```text
+NAME          READY   STATUS    RESTARTS   AGE
+pod-dados-2   1/1     Running   0          44s
+```
+
+**Comando para tentar acessar o arquivo:**
+
+```bash
+kubectl exec pod-dados-2 -- cat /dados/mensagem.txt
+```
+
+**Resultado:**
+
+```text
+cat: can't open '/dados/mensagem.txt': No such file or directory
+command terminated with exit code 1
+```
+
+**O que eu entendi:**
+
+No último passo, criamos outro Pod a partir do arquivo anterior, mudando seu nome para `pod-dados-2`.
+
+Depois verificamos e vimos que ele estava funcionando normalmente, com status `Running`.
+
+Em seguida, tentamos acessar o arquivo `mensagem.txt` novamente, mas o sistema informou que ele não existia.
+
+Isso aconteceu porque, no passo anterior, tivemos um erro ao tentar criar o arquivo. Portanto, não havia nenhum dado gravado para recuperar.
+
+---
+
+## Conclusão
+
+Com essa atividade, consegui entender melhor como funciona o armazenamento no Kubernetes e como podemos utilizar diferentes recursos para organizar nossas aplicações.
+
+Aprendi que o ConfigMap permite guardar configurações que podem ser utilizadas pelos containers, enquanto o PersistentVolume e o PersistentVolumeClaim são utilizados para disponibilizar e solicitar espaços de armazenamento.
+
+Também consegui observar na prática que excluir um Pod não significa necessariamente excluir o armazenamento associado a ele. Porém, para comprovar a persistência dos dados, seria necessário conseguir gravar um arquivo corretamente antes de excluir o primeiro Pod.
+
+Mesmo com o erro que aconteceu durante a criação do arquivo, a atividade foi importante para entender melhor como esses recursos trabalham juntos e como podemos verificar o funcionamento de cada um deles.
+
+**Atividade prática – Aula 6 | Computação em Nuvem**
+
