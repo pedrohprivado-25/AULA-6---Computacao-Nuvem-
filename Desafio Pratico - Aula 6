@@ -1,0 +1,285 @@
+# Desafio Prático – Aula 6 | Computação em Nuvem
+
+## Testando a persistência de dados no Kubernetes
+
+### Introdução
+
+Neste desafio prático, continuamos a atividade da Aula 6, utilizando os recursos que havíamos criado anteriormente no Kubernetes.
+
+O objetivo foi testar se os dados armazenados em um volume persistente continuariam disponíveis mesmo depois de excluir um Pod e criar outro.
+
+Também realizamos a limpeza dos recursos utilizados durante a atividade, removendo os Pods, ConfigMap, PVC e PV.
+
+---
+
+## PASSO 1 – Criando um arquivo no armazenamento
+
+**Comando utilizado:**
+
+```bash
+kubectl exec pod-dados-2 -- sh -c 'echo "Grupo: NOME 1 e NOME 2" > /dados/grupo.txt'
+```
+
+**O que eu entendi:**
+
+Neste primeiro passo, utilizamos o Pod `pod-dados-2` para criar um arquivo chamado `grupo.txt` dentro da pasta `/dados`.
+
+Nesse arquivo, colocamos os nomes dos integrantes do grupo. Como essa pasta estava conectada ao armazenamento persistente, o arquivo foi salvo no volume que já havíamos configurado anteriormente.
+
+---
+
+## PASSO 2 – Excluindo o Pod anterior
+
+**Comando utilizado:**
+
+```bash
+root@controlplane:~$ kubectl delete pod pod-dados-2
+```
+
+**Resultado:**
+
+```text
+pod "pod-dados-2" deleted from default namespace
+```
+
+**O que eu entendi:**
+
+Depois de criar o arquivo, excluímos o Pod `pod-dados-2`.
+
+Essa etapa foi importante porque queríamos verificar se o arquivo continuaria salvo no armazenamento, mesmo depois que o Pod fosse removido.
+
+---
+
+## PASSO 3 – Criando um novo Pod
+
+**Comando utilizado:**
+
+```bash
+sed 's/name: pod-dados/name: pod-dados-3/' pod-dados.yaml> pod-dados-3.yaml
+```
+
+**Comandos utilizados:**
+
+```bash
+root@controlplane:~$ kubectl apply -f pod-dados-3.yaml
+```
+
+**Resultado:**
+
+```text
+pod/pod-dados-3 created
+```
+
+**O que eu entendi:**
+
+Aqui criamos um novo arquivo de configuração baseado no Pod anterior, mas alterando seu nome para `pod-dados-3`.
+
+Depois aplicamos essa configuração no Kubernetes para criar um novo Pod.
+
+A ideia foi utilizar novamente o mesmo armazenamento persistente, mas agora por meio de outro Pod.
+
+---
+
+## PASSO 4 – Verificando os arquivos armazenados
+
+**Comando utilizado:**
+
+```bash
+kubectl exec pod-dados-3 -- ls -l /dados
+```
+
+**Resultado:**
+
+```text
+total 4
+-rw-r--r--    1 root     root            23 Nov 15 01:24 grupo.txt
+```
+
+**O que eu entendi:**
+
+Neste passo, verificamos os arquivos que estavam dentro da pasta `/dados` do novo Pod.
+
+O resultado mostrou que o arquivo `grupo.txt` continuava lá, mesmo depois de termos excluído o Pod anterior e criado outro.
+
+Isso mostrou na prática que o armazenamento persistente estava funcionando e que os dados não dependiam apenas do Pod que havia sido criado inicialmente.
+
+---
+
+## PASSO 5 – Tentando verificar o arquivo da atividade anterior
+
+**Comando utilizado:**
+
+```bash
+kubectl exec pod-dados-3 -- cat /dados/mensagem.txt
+```
+
+**Resultado:**
+
+```text
+cat: can't open '/dados/mensagem.txt': No such file or directory
+command terminated with exit code 1
+```
+
+**O que eu entendi:**
+
+Também tentamos acessar o arquivo `mensagem.txt`, que havíamos tentado criar na atividade anterior.
+
+Porém, o sistema informou que ele não existia. Isso aconteceu porque tivemos um erro durante a tentativa de criação desse arquivo no exercício anterior.
+
+Por isso, não havia nenhum conteúdo para recuperar.
+
+---
+
+## PASSO 6 – Conferindo o arquivo do grupo
+
+**Comando utilizado:**
+
+```bash
+kubectl exec pod-dados-3 -- cat /dados/grupo.txt
+```
+
+**Resultado:**
+
+```text
+Grupo: NOME 1 e NOME 2
+```
+
+**O que eu entendi:**
+
+Neste passo, conseguimos abrir o arquivo `grupo.txt` e visualizar os nomes que havíamos colocado anteriormente.
+
+Esse foi um dos momentos mais importantes do desafio, pois conseguimos confirmar que o arquivo continuava disponível mesmo depois de excluir o Pod antigo.
+
+Assim, conseguimos entender melhor como funciona a persistência de dados no Kubernetes.
+
+---
+
+## PASSO 7 – Excluindo os Pods utilizados
+
+**Comando utilizado:**
+
+```bash
+kubectl delete pod web-config pod-dados-3 --ignore-not-found
+```
+
+**Resultado:**
+
+```text
+pod "web-config" deleted from default namespace
+pod "pod-dados-3" deleted from default namespace
+```
+
+**O que eu entendi:**
+
+Depois de concluir os testes, começamos a limpeza do ambiente.
+
+Nesse passo, removemos os Pods `web-config` e `pod-dados-3`.
+
+O comando também possui a opção `--ignore-not-found`, que permite continuar a exclusão mesmo se algum dos recursos informados não for encontrado.
+
+---
+
+## PASSO 8 – Excluindo o ConfigMap
+
+**Comando utilizado:**
+
+```bash
+kubectl delete configmap pagina-aula6
+```
+
+**Resultado:**
+
+```text
+configmap "pagina-aula6" deleted from default namespace
+```
+
+**O que eu entendi:**
+
+Aqui removemos o ConfigMap que havíamos criado no início da atividade.
+
+Como já tínhamos terminado de utilizar a página HTML carregada pelo Nginx, não precisávamos mais manter essa configuração no ambiente.
+
+---
+
+## PASSO 9 – Excluindo o PVC
+
+**Comando utilizado:**
+
+```bash
+kubectl delete pvc pvc-aula6
+```
+
+**Resultado:**
+
+```text
+persistentvolumeclaim "pvc-aula6" deleted from default namespace
+```
+
+**O que eu entendi:**
+
+Nesta etapa, removemos o PVC, que era responsável por solicitar e utilizar o espaço de armazenamento disponibilizado pelo PV.
+
+Com isso, encerramos a utilização dessa solicitação de armazenamento.
+
+---
+
+## PASSO 10 – Excluindo o PV
+
+**Comando utilizado:**
+
+```bash
+ubectl delete pv pv-aula6
+```
+
+**Resultado:**
+
+```text
+persistentvolume "pv-aula6" deleted
+```
+
+**O que eu entendi:**
+
+Depois de remover o PVC, excluímos também o PV, que representava o espaço de armazenamento criado para a atividade.
+
+Assim, finalizamos a remoção dos recursos de armazenamento que havíamos configurado.
+
+---
+
+## PASSO 11 – Conferindo se os recursos foram removidos
+
+**Comando utilizado:**
+
+```bash
+kubectl get pv,pvc,configmap,pods
+```
+
+**Resultado:**
+
+```text
+NAME                         DATA   AGE
+configmap/kube-root-ca.crt   1      9d
+```
+
+**O que eu entendi:**
+
+No último passo, utilizamos um comando para verificar se ainda existiam PVs, PVCs, ConfigMaps e Pods no ambiente.
+
+O resultado mostrou apenas o ConfigMap `kube-root-ca.crt`, que já fazia parte do ambiente Kubernetes.
+
+Os recursos que criamos durante a atividade não apareceram mais, mostrando que a limpeza foi realizada.
+
+---
+
+## Conclusão
+
+Com esse desafio prático, consegui entender melhor como funciona a persistência de dados no Kubernetes.
+
+O principal aprendizado foi perceber que os dados armazenados em um volume persistente podem continuar disponíveis mesmo depois que um Pod é excluído.
+
+Conseguimos comprovar isso criando o arquivo `grupo.txt`, excluindo o Pod antigo e criando outro para acessar o mesmo armazenamento. Quando verificamos os arquivos, encontramos o `grupo.txt` normalmente e conseguimos visualizar seu conteúdo.
+
+Também aprendemos a remover os recursos utilizados depois de finalizar os testes.
+
+Essa atividade ajudou a entender melhor a diferença entre um Pod e um armazenamento persistente, mostrando que os dados podem continuar salvos mesmo quando um Pod deixa de existir.
+
+**Desafio Prático – Aula 6 | Computação em Nuvem**
